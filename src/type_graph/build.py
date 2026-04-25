@@ -40,6 +40,7 @@ def _function_to_dict(fn: ExtractedFunction, cluster_id: str) -> dict:
         },
         "role": fn.docstring_first_line or "",
         "role_source": "docstring" if fn.docstring_first_line else "missing",
+        # reserved for per-function call list; populated in a later task
         "calls": [],
         "decorators": fn.decorators,
         "is_method": fn.is_method,
@@ -59,6 +60,7 @@ def build_graph(
     function_ids = {fn.id for fn in source_functions}
     cluster_list = list(clusters)
     external_ids = sorted({e.dst for e in resolve.edges if e.dst not in function_ids})
+    # v0: project-prefixed but unresolved symbols are treated as external (missing internals)
     if external_ids:
         cluster_list.append(
             Cluster(
@@ -139,7 +141,7 @@ def build_graph(
             "functions": g.number_of_nodes(),
             "edges": g.number_of_edges(),
             "clusters": len(cluster_dicts),
-            "files": len({f["file"] for f in fn_dicts}),
+            "files": len({f["file"] for f in fn_dicts if f["file"]}),
         },
         clusters=cluster_dicts,
         functions=fn_dicts,

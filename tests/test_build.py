@@ -60,6 +60,27 @@ def test_builds_graph_json(tmp_path: Path) -> None:
     assert payload["unresolved_calls"][0]["reason"] == "unknown-name"
 
 
+def test_stats_files_excludes_external_empty_file_entry() -> None:
+    f1 = make_fn("pkg.a:f", "pkg.a")
+    f2 = make_fn("pkg.b:g", "pkg.b")
+    res = ResolveResult(
+        edges=[ResolvedEdge("pkg.a:f", "external:call", lineno=3)],
+        unresolved=[],
+    )
+    clusters = [
+        Cluster(
+            id="pkg",
+            label="pkg",
+            path="pkg",
+            function_ids=["pkg.a:f", "pkg.b:g"],
+        )
+    ]
+
+    g = build_graph(functions=[f1, f2], resolve=res, clusters=clusters, root="/abs/path")
+
+    assert g.stats["files"] == 2
+
+
 def test_adds_external_cluster_for_unmodeled_resolved_dst(tmp_path: Path) -> None:
     f1 = make_fn("m:f", "m")
     res = ResolveResult(
