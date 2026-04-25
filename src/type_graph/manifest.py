@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -19,9 +21,12 @@ class Diff:
 
 
 def write_manifest(path: Path, m: Manifest) -> None:
-    payload = {"files": {k: list(v) for k, v in m.files.items()}}
+    payload = {"schema_version": 1, "files": {k: list(v) for k, v in m.files.items()}}
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    tmp_fd, tmp_name = tempfile.mkstemp(dir=path.parent)
+    os.close(tmp_fd)
+    Path(tmp_name).write_text(json.dumps(payload, indent=2, sort_keys=True))
+    os.replace(tmp_name, path)
 
 
 def read_manifest(path: Path) -> Manifest:
