@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Callable
 
 from type_graph.discover import discover
+from type_graph.llm import LLMClient
 from type_graph.manifest import diff, read_manifest, Manifest
 from type_graph.pipeline import run
 
@@ -20,6 +22,7 @@ def run_update(
     include_tests: bool,
     excludes,
     no_html: bool,
+    llm_client_factory: Callable[[], LLMClient] | None = None,
 ) -> int:
     root = root.resolve()
     new_files = discover(root, include_tests=include_tests, excludes=list(excludes))
@@ -44,4 +47,5 @@ def run_update(
         infer=infer, cluster_depth=cluster_depth,
         include_tests=include_tests, excludes=excludes, no_html=no_html,
         cached_roles=cached_roles,
+        llm_client_factory=llm_client_factory,
     )

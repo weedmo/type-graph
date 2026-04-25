@@ -2,11 +2,34 @@
 import json
 import shutil
 from pathlib import Path
+from typing import Callable, get_type_hints
 
+from type_graph.llm import LLMClient
 from type_graph.update import run_update
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_repo"
+
+
+def test_run_update_annotations_are_specific() -> None:
+    hints = get_type_hints(run_update)
+
+    assert hints["llm_client"] == LLMClient | Callable[[], LLMClient] | None
+    assert hints["excludes"] == list[str]
+
+
+def test_update_first_run_without_manifest_runs_pipeline(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+
+    assert not (out / "manifest.json").exists()
+    rc = run_update(
+        root=FIXTURE, out_dir=out, llm_client=None, infer=False,
+        cluster_depth=3, include_tests=False, excludes=[], no_html=True,
+    )
+
+    assert rc == 0
+    assert (out / "manifest.json").exists()
+    assert (out / "graph.json").exists()
 
 
 def test_update_short_circuits_when_unchanged(tmp_path: Path) -> None:
@@ -23,6 +46,8 @@ def test_update_short_circuits_when_unchanged(tmp_path: Path) -> None:
         cluster_depth=3, include_tests=False, excludes=[], no_html=False,
     )
     assert rc2 == 0
+    captured = capsys.readouterr()
+    assert captured.err == "type-graph: no changes since last run\n"
     assert (out / "graph.html").stat().st_mtime == first_html_mtime
 
 
@@ -60,3 +85,25 @@ def test_update_reuses_cached_roles_for_unchanged_bodies(tmp_path: Path) -> None
     cached = [f for f in updated["functions"] if f["role_source"] == "llm"]
     assert cached
     assert all(f["role"].startswith("Cached role for ") for f in cached)
+
+
+def test_update_removed_file_triggers_rerun_and_rewrites_manifest(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURE, repo)
+    out = tmp_path / "out"
+    assert run_update(
+        root=repo, out_dir=out, llm_client=None, infer=False,
+        cluster_depth=3, include_tests=False, excludes=[], no_html=True,
+    ) == 0
+
+    (repo / "api.py").unlink()
+
+    assert run_update(
+        root=repo, out_dir=out, llm_client=None, infer=False,
+        cluster_depth=3, include_tests=False, excludes=[], no_html=True,
+    ) == 0
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert "api.py" not in manifest["files"]
+    assert "models.py" in manifest["files"]
+    graph = json.loads((out / "graph.json").read_text())
+    assert all(f.get("file") != "api.py" for f in graph["functions"])

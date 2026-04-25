@@ -1,4 +1,5 @@
 # tests/test_infer.py
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from typing import get_type_hints
@@ -33,7 +34,9 @@ def test_enhance_records_pyright_summary(tmp_path) -> None:
             }
         ],
     )
-    with patch("type_graph.infer._run_pyright", return_value=PYRIGHT_OUTPUT):
+    with patch("type_graph.infer._which_pyright", return_value="pyright"), patch(
+        "type_graph.infer._run_pyright", return_value=PYRIGHT_OUTPUT
+    ):
         enhance_with_pyright(tmp_path, payload)
     assert payload.stats["pyright_errors"] == 1
     assert payload.stats["pyright_warnings"] == 2
@@ -63,6 +66,21 @@ def test_run_pyright_uses_timeout(tmp_path) -> None:
         text=True,
         timeout=600,
     )
+
+
+def test_run_pyright_timeout_exits_cleanly(tmp_path, capsys) -> None:
+    with patch(
+        "type_graph.infer.subprocess.run",
+        side_effect=subprocess.TimeoutExpired(["pyright"], timeout=600),
+    ):
+        try:
+            _run_pyright(tmp_path)
+        except SystemExit as e:
+            assert e.code == 3
+        else:
+            raise AssertionError("expected SystemExit(3)")
+
+    assert "pyright timed out after 600 seconds" in capsys.readouterr().err
 
 
 def test_enhance_root_annotation_is_path() -> None:

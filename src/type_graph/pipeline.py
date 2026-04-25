@@ -5,7 +5,7 @@ import dataclasses
 from pathlib import Path
 from typing import Callable, Iterable, Mapping
 
-from type_graph.build import build_graph, write_graph_json
+from type_graph.build import GraphPayload, build_graph, write_graph_json
 from type_graph.cluster import build_clusters
 from type_graph.discover import discover
 from type_graph.extract import extract_functions
@@ -27,21 +27,34 @@ def _normalize_function(fn) -> None:
     fn.returns = normalize_annotation(fn.returns)
 
 
-class _LazyLLMClient:
-    def __init__(self, factory: Callable[[], LLMClient]) -> None:
-        self._factory = factory
-        self._client: LLMClient | None = None
+def _cached_role_is_reusable(
+    fn: dict,
+    cached_roles: Mapping[str, tuple[str, str, str]] | None,
+) -> bool:
+    if not cached_roles:
+        return False
+    cached = cached_roles.get(fn["id"])
+    return bool(
+        cached
+        and cached[0] == fn.get("hash")
+        and cached[1]
+        and cached[2] not in {"missing", "failed"}
+    )
 
-    def _get(self) -> LLMClient:
-        if self._client is None:
-            self._client = self._factory()
-        return self._client
 
-    def summarize_function(self, name: str, body_excerpt: str) -> str:
-        return self._get().summarize_function(name, body_excerpt)
+def _payload_needs_llm(
+    payload: GraphPayload,
+    cached_roles: Mapping[str, tuple[str, str, str]] | None,
+) -> bool:
+    for f in payload.functions:
+        if f.get("role_source") == "missing" and not _cached_role_is_reusable(f, cached_roles):
+            return True
 
-    def summarize_cluster(self, cluster_id: str, function_lines: list[str]) -> str:
-        return self._get().summarize_cluster(cluster_id, function_lines)
+    by_id = {f["id"] for f in payload.functions}
+    return any(
+        any(fid in by_id for fid in c.get("function_ids", []))
+        for c in payload.clusters
+    )
 
 
 def run(
@@ -91,8 +104,12 @@ def run(
         enhance_with_pyright(root, payload)
 
     label_client = llm_client
-    if label_client is None and llm_client_factory is not None:
-        label_client = _LazyLLMClient(llm_client_factory)
+    if (
+        label_client is None
+        and llm_client_factory is not None
+        and _payload_needs_llm(payload, cached_roles)
+    ):
+        label_client = llm_client_factory()
     label_payload(payload, client=label_client, cached_roles=cached_roles)
 
     out_dir.mkdir(parents=True, exist_ok=True)

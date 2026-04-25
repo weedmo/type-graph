@@ -17,7 +17,11 @@ def _which_pyright() -> str | None:
 def _run_pyright(root: Path) -> dict:
     cmd = ["pyright", "--outputjson", str(root)]
     # pyright exits non-zero when diagnostics found; JSON is still valid
-    cp = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    try:
+        cp = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired as e:
+        print(f"type-graph: pyright timed out after {e.timeout} seconds", file=sys.stderr)
+        raise SystemExit(3)
     try:
         return json.loads(cp.stdout or "{}")
     except json.JSONDecodeError:
