@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "type-graph"
+version = "0.0.1"
+description = "Function-level type and call graph for Python codebases"
+requires-python = ">=3.11"
+dependencies = [
+    "networkx>=3.2",
+    "anthropic>=0.34",
+    "pathspec>=0.12",
+]
+
+[project.optional-dependencies]
+infer = ["pyright>=1.1.350"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+
+[project.scripts]
+type-graph = "type_graph.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+type_graph = ["templates/*.tmpl"]
+"type_graph.templates" = ["*.tmpl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
