@@ -16,11 +16,11 @@ def run_update(
     *,
     root: Path,
     out_dir: Path,
-    llm_client,
+    llm_client: LLMClient | Callable[[], LLMClient] | None,
     infer: bool,
     cluster_depth: int,
     include_tests: bool,
-    excludes,
+    excludes: list[str],
     no_html: bool,
     llm_client_factory: Callable[[], LLMClient] | None = None,
 ) -> int:
@@ -41,11 +41,21 @@ def run_update(
         for f in prev.get("functions", []):
             cached_roles[f["id"]] = (f.get("hash", ""), f.get("role", ""), f.get("role_source", "missing"))
 
+    label_client = llm_client
+    label_client_factory = llm_client_factory
+    if (
+        label_client_factory is None
+        and callable(llm_client)
+        and not hasattr(llm_client, "summarize_function")
+    ):
+        label_client = None
+        label_client_factory = llm_client
+
     return run(
         root=root, out_dir=out_dir,
-        llm_client=llm_client,
+        llm_client=label_client,
         infer=infer, cluster_depth=cluster_depth,
         include_tests=include_tests, excludes=excludes, no_html=no_html,
         cached_roles=cached_roles,
-        llm_client_factory=llm_client_factory,
+        llm_client_factory=label_client_factory,
     )

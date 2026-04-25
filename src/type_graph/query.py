@@ -32,6 +32,7 @@ def explain(function_id: str, *, graph_path: Path) -> int:
 
 def shortest_call_path(a: str, b: str, *, graph_path: Path) -> list[str] | None:
     payload = _load(graph_path)
+    # Rebuilding the graph per call keeps the v0 query path simple.
     g = nx.DiGraph()
     for f in payload["functions"]:
         g.add_node(f["id"])
@@ -49,14 +50,13 @@ def query(question: str, *, graph_path: Path, client) -> int:
         return 3
     payload = _load(graph_path)
     cluster_lines = [f"- {c['id']}: {c.get('summary','')}" for c in payload["clusters"]]
-    function_names = [f["qualname"] for f in payload["functions"][:200]]
-    prompt = (
-        f"Question: {question}\n\nClusters:\n" + "\n".join(cluster_lines)
+    function_names = [f["id"].replace(":", ".") for f in payload["functions"][:200]]
+    context_str = (
+        "Clusters:\n" + "\n".join(cluster_lines)
         + "\n\nA few function names:\n" + ", ".join(function_names)
-        + "\n\nAnswer in one short paragraph."
     )
     try:
-        ans = client.summarize_function("query", prompt)
+        ans = client.answer_question(question, context_str)
         print(ans)
         return 0
     except Exception as exc:

@@ -15,6 +15,7 @@ def test_run_update_annotations_are_specific() -> None:
     hints = get_type_hints(run_update)
 
     assert hints["llm_client"] == LLMClient | Callable[[], LLMClient] | None
+    assert hints["llm_client_factory"] == Callable[[], LLMClient] | None
     assert hints["excludes"] == list[str]
 
 
