@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 
+from type_graph import cli
 from type_graph.pipeline import run
 
 
@@ -37,4 +38,14 @@ def test_cli_entrypoint_runs(tmp_path: Path) -> None:
         capture_output=True, text=True,
     )
     assert cp.returncode == 0, cp.stderr
+    assert (out / "graph.json").exists()
+
+
+def test_cli_does_not_construct_llm_before_pipeline_needs_it(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("TYPE_GRAPH_ANTHROPIC_MODEL", raising=False)
+    out = tmp_path / "out"
+
+    rc = cli.main([str(FIXTURE), "--out", str(out), "--exclude", "*.py"])
+
+    assert rc == 0
     assert (out / "graph.json").exists()

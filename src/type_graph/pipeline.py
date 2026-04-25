@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Callable, Iterable, Mapping
 
 from type_graph.build import build_graph, write_graph_json
 from type_graph.cluster import build_clusters
@@ -27,6 +27,23 @@ def _normalize_function(fn) -> None:
     fn.returns = normalize_annotation(fn.returns)
 
 
+class _LazyLLMClient:
+    def __init__(self, factory: Callable[[], LLMClient]) -> None:
+        self._factory = factory
+        self._client: LLMClient | None = None
+
+    def _get(self) -> LLMClient:
+        if self._client is None:
+            self._client = self._factory()
+        return self._client
+
+    def summarize_function(self, name: str, body_excerpt: str) -> str:
+        return self._get().summarize_function(name, body_excerpt)
+
+    def summarize_cluster(self, cluster_id: str, function_lines: list[str]) -> str:
+        return self._get().summarize_cluster(cluster_id, function_lines)
+
+
 def run(
     *,
     root: Path,
@@ -38,6 +55,7 @@ def run(
     excludes: Iterable[str],
     no_html: bool,
     cached_roles: Mapping[str, tuple[str, str, str]] | None = None,
+    llm_client_factory: Callable[[], LLMClient] | None = None,
 ) -> int:
     root = root.resolve()
     files = discover(root, include_tests=include_tests, excludes=list(excludes))
@@ -72,7 +90,10 @@ def run(
         from type_graph.infer import enhance_with_pyright
         enhance_with_pyright(root, payload)
 
-    label_payload(payload, client=llm_client, cached_roles=cached_roles)
+    label_client = llm_client
+    if label_client is None and llm_client_factory is not None:
+        label_client = _LazyLLMClient(llm_client_factory)
+    label_payload(payload, client=label_client, cached_roles=cached_roles)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     write_graph_json(out_dir / "graph.json", payload)

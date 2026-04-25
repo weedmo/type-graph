@@ -51,7 +51,8 @@ def main(argv: list[str] | None = None) -> int:
 
     rc = run(
         root=args.path, out_dir=out,
-        llm_client=None if args.no_llm else AnthropicClient(),
+        llm_client=None,
+        llm_client_factory=None if args.no_llm else AnthropicClient,
         infer=args.infer, cluster_depth=args.cluster_depth,
         include_tests=args.include_tests, excludes=args.exclude,
         no_html=args.no_html,

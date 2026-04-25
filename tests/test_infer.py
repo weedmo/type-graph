@@ -1,8 +1,11 @@
 # tests/test_infer.py
+from pathlib import Path
+from types import SimpleNamespace
+from typing import get_type_hints
 from unittest.mock import patch
 
 from type_graph.build import GraphPayload
-from type_graph.infer import enhance_with_pyright
+from type_graph.infer import _run_pyright, enhance_with_pyright
 
 
 PYRIGHT_OUTPUT = {
@@ -47,3 +50,20 @@ def test_enhance_missing_pyright_raises() -> None:
             assert e.code == 3
         else:
             raise AssertionError("expected SystemExit(3)")
+
+
+def test_run_pyright_uses_timeout(tmp_path) -> None:
+    cp = SimpleNamespace(stdout='{"summary": {}, "generalDiagnostics": []}', stderr="")
+    with patch("type_graph.infer.subprocess.run", return_value=cp) as run:
+        assert _run_pyright(tmp_path) == {"summary": {}, "generalDiagnostics": []}
+
+    run.assert_called_once_with(
+        ["pyright", "--outputjson", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+
+
+def test_enhance_root_annotation_is_path() -> None:
+    assert get_type_hints(enhance_with_pyright)["root"] is Path

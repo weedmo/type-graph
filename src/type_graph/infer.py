@@ -16,7 +16,8 @@ def _which_pyright() -> str | None:
 
 def _run_pyright(root: Path) -> dict:
     cmd = ["pyright", "--outputjson", str(root)]
-    cp = subprocess.run(cmd, capture_output=True, text=True)
+    # pyright exits non-zero when diagnostics found; JSON is still valid
+    cp = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     try:
         return json.loads(cp.stdout or "{}")
     except json.JSONDecodeError:
@@ -24,7 +25,7 @@ def _run_pyright(root: Path) -> dict:
         raise SystemExit(3)
 
 
-def enhance_with_pyright(root, payload: GraphPayload) -> None:
+def enhance_with_pyright(root: Path, payload: GraphPayload) -> None:
     if _which_pyright() is None:
         print("type-graph: --infer requested but pyright not found. pip install pyright.", file=sys.stderr)
         raise SystemExit(3)
