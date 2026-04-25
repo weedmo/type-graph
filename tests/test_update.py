@@ -32,7 +32,7 @@ def test_update_first_run_without_manifest_runs_pipeline(tmp_path: Path) -> None
     assert (out / "graph.json").exists()
 
 
-def test_update_short_circuits_when_unchanged(tmp_path: Path) -> None:
+def test_update_short_circuits_when_unchanged(tmp_path: Path, capsys) -> None:
     out = tmp_path / "out"
     rc1 = run_update(
         root=FIXTURE, out_dir=out, llm_client=None, infer=False,
@@ -57,6 +57,35 @@ class NoFunctionLLM:
 
     def summarize_cluster(self, cluster_id: str, function_lines: list[str]) -> str:
         return f"Cluster {cluster_id}"
+
+
+class StaticLLM:
+    def summarize_function(self, name: str, body_excerpt: str) -> str:
+        return f"Role for {name}"
+
+    def summarize_cluster(self, cluster_id: str, function_lines: list[str]) -> str:
+        return f"Cluster {cluster_id}"
+
+
+def test_update_accepts_llm_client_factory(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    factory_calls = 0
+
+    def build_client() -> LLMClient:
+        nonlocal factory_calls
+        factory_calls += 1
+        return StaticLLM()
+
+    assert run_update(
+        root=FIXTURE, out_dir=out, llm_client=build_client, infer=False,
+        cluster_depth=3, include_tests=False, excludes=[], no_html=True,
+    ) == 0
+
+    graph = json.loads((out / "graph.json").read_text())
+    greet = next(f for f in graph["functions"] if f["id"] == "sample_repo.api:greet")
+    assert factory_calls == 1
+    assert greet["role_source"] == "llm"
+    assert greet["role"] == "Role for greet"
 
 
 def test_update_reuses_cached_roles_for_unchanged_bodies(tmp_path: Path) -> None:
