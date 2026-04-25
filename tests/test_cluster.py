@@ -1,9 +1,15 @@
 # tests/test_cluster.py
+import pytest
+
 from type_graph.cluster import build_clusters, Cluster
 
 
 def make_fn(id_: str, module: str, file: str) -> dict:
     return {"id": id_, "module": module, "file": file}
+
+
+def test_empty_input_returns_no_clusters() -> None:
+    assert build_clusters([]) == []
 
 
 def test_simple_package_cluster() -> None:
@@ -40,11 +46,44 @@ def test_depth_limit_flattens_deep_modules() -> None:
     assert len(placed) == 1 and placed[0].id == "a.b"
 
 
+def test_depth_one_truncates_to_first_package_segment() -> None:
+    fns = [make_fn("pkg.sub.a:f", "pkg.sub.a", "pkg/sub/a.py")]
+    clusters = build_clusters(fns, depth=1)
+    placed = [c for c in clusters if "pkg.sub.a:f" in c.function_ids]
+    assert len(placed) == 1 and placed[0].id == "pkg"
+
+
+def test_depth_zero_raises_value_error() -> None:
+    fns = [make_fn("pkg.sub.a:f", "pkg.sub.a", "pkg/sub/a.py")]
+    with pytest.raises(ValueError, match="depth must be >= 1"):
+        build_clusters(fns, depth=0)
+
+
 def test_init_belongs_to_package_cluster() -> None:
     fns = [make_fn("pkg:init", "pkg", "pkg/__init__.py")]
     clusters = build_clusters(fns, depth=3)
     by_id = {c.id: c for c in clusters}
     assert by_id["pkg"].function_ids == ["pkg:init"]
+
+
+def test_root_init_without_root_package_belongs_to_root_cluster() -> None:
+    fns = [make_fn("__init__:init", "", "__init__.py")]
+    clusters = build_clusters(fns, depth=3)
+    by_id = {c.id: c for c in clusters}
+    assert by_id["__root__"].function_ids == ["__init__:init"]
+
+
+def test_top_level_non_packaged_module_belongs_to_root_cluster() -> None:
+    fns = [make_fn("a:f", "a", "a.py")]
+    clusters = build_clusters(fns, depth=3)
+    assert [c.id for c in clusters] == ["__root__"]
+
+
+def test_root_cluster_path_is_empty() -> None:
+    fns = [make_fn("a:f", "a", "a.py")]
+    clusters = build_clusters(fns, depth=3)
+    by_id = {c.id: c for c in clusters}
+    assert by_id["__root__"].path == ""
 
 
 def test_top_level_module_with_root_package_prefix() -> None:

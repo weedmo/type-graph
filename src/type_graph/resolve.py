@@ -37,14 +37,20 @@ def build_import_map(path: Path) -> dict[str, str]:
             for alias in node.names:
                 local = alias.asname or alias.name.split(".")[0]
                 out[local] = alias.asname and alias.name or alias.name
-        elif isinstance(node, ast.ImportFrom) and node.module:
+        elif isinstance(node, ast.ImportFrom):
+            if node.module is None:
+                # V0 has no package context here, so relative imports like "from . import x" are skipped.
+                continue
             for alias in node.names:
+                if alias.name == "*":
+                    continue
                 local = alias.asname or alias.name
                 out[local] = f"{node.module}.{alias.name}"
     return out
 
 
 def _class_for_qualname(qualname: str) -> str | None:
+    # Nested classes are represented by keeping everything before the final method segment.
     if "." in qualname:
         return qualname.rsplit(".", 1)[0]
     return None
@@ -87,6 +93,12 @@ def _resolve_one(
 
     if head in module_imports:
         target = module_imports[head]
+        target_parts = target.split(".")
+        if len(target_parts) > 1 and parts[: len(target_parts)] == target_parts:
+            rest = ".".join(parts[len(target_parts) :])
+            if not rest:
+                return None, "dotted-import"
+            return f"{target}:{rest}", ""
         rest = ".".join(parts[1:])
         return f"{target}:{rest}", ""
 

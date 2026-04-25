@@ -9,6 +9,7 @@ def test_strips_whitespace() -> None:
 def test_unquotes_string_annotation() -> None:
     assert normalize_annotation("'List[int]'") == "List[int]"
     assert normalize_annotation('"dict[str, Tensor]"') == "dict[str, Tensor]"
+    assert normalize_annotation(" ' int ' ") == "int"
 
 
 def test_partially_unquotes_triple_quoted_string() -> None:

@@ -37,6 +37,9 @@ def build_clusters(
     *,
     depth: int = 3,
 ) -> list[Cluster]:
+    if depth is not None and depth < 1:
+        raise ValueError("depth must be >= 1")
+
     clusters: dict[str, Cluster] = {}
 
     def ensure(path_dotted: str) -> Cluster:

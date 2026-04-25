@@ -28,6 +28,29 @@ def test_import_map(tmp_path: Path) -> None:
     }
 
 
+def test_import_map_skips_star_import(tmp_path: Path) -> None:
+    p = write_py(tmp_path / "m.py", '''
+        from pkg.sub import *
+    ''')
+    imports = build_import_map(p)
+    assert "*" not in imports
+    assert imports == {}
+
+
+def test_import_map_records_dotted_import_head(tmp_path: Path) -> None:
+    p = write_py(tmp_path / "m.py", '''
+        import x.y.z
+    ''')
+    assert build_import_map(p) == {"x": "x.y.z"}
+
+
+def test_import_map_skips_relative_import_without_module(tmp_path: Path) -> None:
+    p = write_py(tmp_path / "m.py", '''
+        from . import sibling
+    ''')
+    assert build_import_map(p) == {}
+
+
 def test_resolves_same_module_call(tmp_path: Path) -> None:
     p = write_py(tmp_path / "m.py", '''
         def helper():
@@ -56,6 +79,33 @@ def test_resolves_imported_call(tmp_path: Path) -> None:
     assert edges and edges[0].dst == "pkg:helper"
 
 
+def test_dotted_import_call_is_unresolved(tmp_path: Path) -> None:
+    p = write_py(tmp_path / "m.py", '''
+        import x.y.z
+        def main():
+            x.y.z()
+    ''')
+    funcs = extract_functions(p, module="m")
+    imports = {"m": build_import_map(p)}
+    resolved = resolve_calls(funcs, fn_index={f.id: f for f in funcs}, imports_by_module=imports)
+    assert resolved.edges == []
+    assert any(u.src == "m:main" and u.name == "x.y.z" for u in resolved.unresolved)
+
+
+def test_dotted_import_resolves_member_call(tmp_path: Path) -> None:
+    p = write_py(tmp_path / "m.py", '''
+        import x.y.z
+        def main():
+            x.y.z.helper()
+    ''')
+    funcs = extract_functions(p, module="m")
+    imports = {"m": build_import_map(p)}
+    resolved = resolve_calls(funcs, fn_index={f.id: f for f in funcs}, imports_by_module=imports)
+    edges = [e for e in resolved.edges if e.src == "m:main"]
+    assert edges and edges[0].dst == "x.y.z:helper"
+    assert not any(u.src == "m:main" and u.name == "x.y.z.helper" for u in resolved.unresolved)
+
+
 def test_records_unresolved_dynamic_attr(tmp_path: Path) -> None:
     p = write_py(tmp_path / "m.py", '''
         def main():
@@ -79,3 +129,30 @@ def test_resolves_self_method_inside_class(tmp_path: Path) -> None:
     resolved = resolve_calls(funcs, fn_index={f.id: f for f in funcs}, imports_by_module={"m": {}})
     edges = [e for e in resolved.edges if e.src == "m:C.main"]
     assert edges and edges[0].dst == "m:C.helper"
+
+
+def test_super_method_call_is_unresolved_inside_class(tmp_path: Path) -> None:
+    p = write_py(tmp_path / "m.py", '''
+        class C:
+            def main(self):
+                super().method()
+    ''')
+    funcs = extract_functions(p, module="m")
+    resolved = resolve_calls(funcs, fn_index={f.id: f for f in funcs}, imports_by_module={"m": {}})
+    assert resolved.edges == []
+    assert any(u.src == "m:C.main" and u.name == "super().method" for u in resolved.unresolved)
+
+
+def test_nested_class_method_resolution_does_not_crash(tmp_path: Path) -> None:
+    p = write_py(tmp_path / "m.py", '''
+        class Outer:
+            class Inner:
+                def helper(self):
+                    return 1
+                def main(self):
+                    self.helper()
+    ''')
+    funcs = extract_functions(p, module="m")
+    resolved = resolve_calls(funcs, fn_index={f.id: f for f in funcs}, imports_by_module={"m": {}})
+    edges = [e for e in resolved.edges if e.src == "m:Outer.Inner.main"]
+    assert edges and edges[0].dst == "m:Outer.Inner.helper"
