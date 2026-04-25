@@ -11,8 +11,16 @@ def test_unquotes_string_annotation() -> None:
     assert normalize_annotation('"dict[str, Tensor]"') == "dict[str, Tensor]"
 
 
+def test_partially_unquotes_triple_quoted_string() -> None:
+    assert normalize_annotation('"""foo"""') == '""foo""'
+
+
 def test_returns_none_for_none() -> None:
     assert normalize_annotation(None) is None
+
+
+def test_returns_none_for_empty_string() -> None:
+    assert normalize_annotation("") is None
 
 
 def test_keeps_complex_form() -> None:

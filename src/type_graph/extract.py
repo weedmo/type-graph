@@ -42,6 +42,20 @@ def _annotation_to_str(node: ast.AST | None) -> str | None:
     return ast.unparse(node)
 
 
+def _param_to_model(node: ast.arg, *, prefix: str = "") -> Param:
+    return Param(f"{prefix}{node.arg}", _annotation_to_str(node.annotation))
+
+
+def _params_from_arguments(args: ast.arguments) -> list[Param]:
+    params = [_param_to_model(a) for a in [*args.posonlyargs, *args.args]]
+    if args.vararg is not None:
+        params.append(_param_to_model(args.vararg, prefix="*"))
+    params.extend(_param_to_model(a) for a in args.kwonlyargs)
+    if args.kwarg is not None:
+        params.append(_param_to_model(args.kwarg, prefix="**"))
+    return params
+
+
 def _decorator_to_str(node: ast.expr) -> str:
     return ast.unparse(node)
 
@@ -56,10 +70,13 @@ def _call_target(node: ast.Call) -> str | None:
 
 def _call_sites_in_body(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[CallSite]:
     calls: list[CallSite] = []
+    # Decorators live in decorator_list, not body, so decorator factories are not call sites.
     for stmt in node.body:
         for child in ast.walk(stmt):
             if isinstance(child, ast.Call):
-                calls.append(CallSite(name=_call_target(child) or "?", lineno=child.lineno))
+                target = _call_target(child)
+                if target is not None:
+                    calls.append(CallSite(name=target, lineno=child.lineno))
     return calls
 
 
@@ -74,10 +91,11 @@ def _docstring_first_line(node: ast.AST) -> str | None:
 
 
 def _hash_body(node: ast.AST) -> str:
-    return hashlib.sha1(ast.dump(node).encode()).hexdigest()
+    return hashlib.sha1(ast.dump(node).encode(), usedforsecurity=False).hexdigest()
 
 
 def extract_functions(path: Path, *, module: str) -> list[ExtractedFunction]:
+    # SyntaxError intentionally propagates so callers can choose whether to skip or report bad files.
     tree = ast.parse(path.read_text(), filename=str(path))
     out: list[ExtractedFunction] = []
 
@@ -85,10 +103,7 @@ def extract_functions(path: Path, *, module: str) -> list[ExtractedFunction]:
         for child in ast.iter_child_nodes(node):
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 qual = f"{qual_prefix}{child.name}" if qual_prefix else child.name
-                params = [
-                    Param(a.arg, _annotation_to_str(a.annotation))
-                    for a in child.args.args
-                ]
+                params = _params_from_arguments(child.args)
                 calls = _call_sites_in_body(child)
                 out.append(
                     ExtractedFunction(
@@ -107,6 +122,7 @@ def extract_functions(path: Path, *, module: str) -> list[ExtractedFunction]:
                         body_hash=_hash_body(child),
                     )
                 )
+                # V0 indexes module-level functions and class methods only; nested defs are not emitted.
             elif isinstance(child, ast.ClassDef):
                 visit(child, f"{qual_prefix}{child.name}.", in_class=True)
 
