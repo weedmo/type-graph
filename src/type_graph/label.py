@@ -49,3 +49,4 @@ def label_payload(
             c["summary"] = client.summarize_cluster(c["id"], lines)
         except Exception:
             c["summary"] = ""
+            c["summary_source"] = "failed"
