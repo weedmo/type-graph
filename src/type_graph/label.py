@@ -26,6 +26,7 @@ def label_payload(
             continue
         if client is None:
             continue
+        # v0: location string only, body excerpt is a TODO.
         excerpt = f"{f['qualname']} at {f.get('file', '')}:{f.get('lineno', '')}"
         try:
             f["role"] = client.summarize_function(f["qualname"], excerpt)
