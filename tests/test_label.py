@@ -16,6 +16,12 @@ class FakeClient:
         return f"Cluster summary for {cluster_id}"
 
 
+class FailingClusterClient(FakeClient):
+    def summarize_cluster(self, cluster_id: str, function_lines: list[str]) -> str:
+        self.calls.append(("cluster", [cluster_id]))
+        raise RuntimeError("cluster summary failed")
+
+
 def make_fn(id_, role, source):
     return {
         "id": id_,
@@ -81,3 +87,18 @@ def test_cached_role_reused_without_function_llm_call() -> None:
     assert payload.functions[0]["role"] == "Cached role."
     assert payload.functions[0]["role_source"] == "llm"
     assert ("fn", ["b"]) not in client.calls
+
+
+def test_failed_cluster_summary_tracks_source() -> None:
+    payload = GraphPayload(
+        root="/r",
+        stats={"functions": 1, "edges": 0, "clusters": 1, "files": 1},
+        clusters=[{"id": "m", "label": "m", "summary": "", "path": "m",
+                   "function_ids": ["m:b"], "child_clusters": []}],
+        functions=[make_fn("m:b", "Do B.", "docstring")],
+        edges=[], unresolved_calls=[],
+    )
+    client = FailingClusterClient()
+    label_payload(payload, client=client)
+    assert payload.clusters[0]["summary"] == ""
+    assert payload.clusters[0]["summary_source"] == "failed"
