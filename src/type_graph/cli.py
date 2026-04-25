@@ -9,11 +9,6 @@ from type_graph.llm import AnthropicClient
 from type_graph.pipeline import run
 
 
-def _default_graph_path() -> Path:
-    # Subcommand graph default is relative to the current working directory.
-    return Path("type-graph-out/graph.json")
-
-
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="type-graph")
     p.add_argument("path", nargs="?", type=Path)
@@ -43,7 +38,8 @@ def _maybe_dispatch_subcommand(argv: list[str] | None) -> int | None:
             print("usage: type-graph explain <function_id> [graph.json]", file=sys.stderr)
             return 3
         function_id = raw[1]
-        graph = Path(raw[2]) if len(raw) > 2 else _default_graph_path()
+        # Default graph path is relative to the current working directory.
+        graph = Path(raw[2]) if len(raw) > 2 else Path("type-graph-out/graph.json")
         from type_graph.query import explain
         return explain(function_id, graph_path=graph)
 
@@ -52,7 +48,8 @@ def _maybe_dispatch_subcommand(argv: list[str] | None) -> int | None:
             print("usage: type-graph path <a> <b> [graph.json]", file=sys.stderr)
             return 3
         a, b = raw[1], raw[2]
-        graph = Path(raw[3]) if len(raw) > 3 else _default_graph_path()
+        # Default graph path is relative to the current working directory.
+        graph = Path(raw[3]) if len(raw) > 3 else Path("type-graph-out/graph.json")
         from type_graph.query import shortest_call_path
         chain = shortest_call_path(a, b, graph_path=graph)
         print(" -> ".join(chain) if chain else "no path")
@@ -65,7 +62,8 @@ def _maybe_dispatch_subcommand(argv: list[str] | None) -> int | None:
             print('usage: type-graph query "<question>" [graph.json] [--no-llm]', file=sys.stderr)
             return 3
         question = args[0]
-        graph = Path(args[1]) if len(args) > 1 else _default_graph_path()
+        # Default graph path is relative to the current working directory.
+        graph = Path(args[1]) if len(args) > 1 else Path("type-graph-out/graph.json")
         from type_graph.llm import AnthropicClient as _AnthropicClient
         from type_graph.query import query as run_query
         return run_query(question, graph_path=graph, client=None if no_llm else _AnthropicClient())
