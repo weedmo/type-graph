@@ -1,4 +1,5 @@
 # tests/test_discover.py
+import hashlib
 from pathlib import Path
 import textwrap
 from type_graph.discover import discover, DiscoveredFile
@@ -38,3 +39,44 @@ def test_discover_respects_exclude_globs(tmp_path: Path) -> None:
     rels = [f.relpath.as_posix() for f in found]
     assert "a.py" in rels
     assert all("migrations" not in r for r in rels)
+
+
+def test_discover_stats_before_reading_so_sha1_matches_snapshot(
+    tmp_path: Path, monkeypatch
+) -> None:
+    target = tmp_path / "a.py"
+    old_contents = b"x = 1\n"
+    discovered_contents = b"x = 2\n"
+    target.write_bytes(old_contents)
+    root = tmp_path.resolve()
+    original_rglob = Path.rglob
+    original_stat = Path.stat
+    original_read_bytes = Path.read_bytes
+    events: list[str] = []
+
+    def rglob_one_file(self: Path, pattern: str):
+        if self == root and pattern == "*.py":
+            return [target]
+        return original_rglob(self, pattern)
+
+    def stat_and_update_file(self: Path, *args, **kwargs):
+        if self == target:
+            events.append("stat")
+            target.write_bytes(discovered_contents)
+        return original_stat(self, *args, **kwargs)
+
+    def read_bytes_and_record(self: Path):
+        if self == target:
+            events.append("read")
+        return original_read_bytes(self)
+
+    monkeypatch.setattr(Path, "rglob", rglob_one_file)
+    monkeypatch.setattr(Path, "stat", stat_and_update_file)
+    monkeypatch.setattr(Path, "read_bytes", read_bytes_and_record)
+
+    found = discover(root, include_tests=True)
+
+    assert events == ["stat", "read"]
+    assert found[0].sha1 == hashlib.sha1(
+        discovered_contents, usedforsecurity=False
+    ).hexdigest()

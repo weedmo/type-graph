@@ -48,13 +48,14 @@ def discover(
         rel = p.relative_to(root)
         if spec.match_file(rel.as_posix()):
             continue
+        st = p.stat()
         data = p.read_bytes()
         out.append(
             DiscoveredFile(
                 relpath=rel,
                 abspath=p,
-                mtime=p.stat().st_mtime,
-                sha1=hashlib.sha1(data).hexdigest(),
+                mtime=st.st_mtime,
+                sha1=hashlib.sha1(data, usedforsecurity=False).hexdigest(),
             )
         )
     return out

@@ -8,3 +8,10 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+.codex/
+.codex
+.mypy_cache/
+.ruff_cache/
+.pyright/
+.env
+.env.local
