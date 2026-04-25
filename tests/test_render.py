@@ -6,6 +6,8 @@ from type_graph.build import GraphPayload
 from type_graph.render import write_html
 
 
+# Browser rendering and HTTP-serve smoke coverage are deferred to the Task 17
+# lerobot smoke test; this unit test only verifies the generated HTML payload.
 def test_html_embeds_payload(tmp_path: Path) -> None:
     payload = GraphPayload(
         root="/r",
