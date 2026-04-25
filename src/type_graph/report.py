@@ -12,6 +12,7 @@ def write_report(path: Path, payload: GraphPayload) -> None:
     resolved = len(payload.edges)
     total_calls = resolved + len(payload.unresolved_calls)
     role_dist = Counter(f.get("role_source", "missing") for f in payload.functions)
+    role_source = ", ".join(f"{k}={v}" for k, v in sorted(role_dist.items()))
     typed = sum(
         1
         for f in payload.functions
@@ -35,7 +36,7 @@ def write_report(path: Path, payload: GraphPayload) -> None:
         "## Honesty",
         "",
         f"- resolved calls / total calls: {resolved} / {total_calls}",
-        f"- role_source: " + ", ".join(f"{k}={v}" for k, v in sorted(role_dist.items())),
+        f"- role_source: {role_source or '(none)'}",
         f"- fully-typed signatures / total: {typed} / {s['functions']}",
         "",
         "## Clusters",
@@ -59,7 +60,8 @@ def write_report(path: Path, payload: GraphPayload) -> None:
             )
             ret = sig["returns"] or "Any"
             role = f.get("role") or "(no description)"
-            lines.append(f"- `{f['qualname']}({params}) -> {ret}` — {role}")
+            qualname = f["qualname"].replace("`", "'")
+            lines.append(f"- `{qualname}({params}) -> {ret}` — {role}")
         lines.append("")
 
     path.parent.mkdir(parents=True, exist_ok=True)
