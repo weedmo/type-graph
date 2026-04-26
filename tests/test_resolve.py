@@ -106,7 +106,9 @@ def test_dotted_import_resolves_member_call(tmp_path: Path) -> None:
     assert not any(u.src == "m:main" and u.name == "x.y.z.helper" for u in resolved.unresolved)
 
 
-def test_records_unresolved_dynamic_attr(tmp_path: Path) -> None:
+def test_dynamic_attr_calls_are_silently_skipped(tmp_path: Path) -> None:
+    # dynamic-attr calls (method calls on opaque objects) are skipped — they are
+    # inherently unresolvable without type inference and would inflate the ratio.
     p = write_py(tmp_path / "m.py", '''
         def main():
             self.something()
@@ -114,7 +116,7 @@ def test_records_unresolved_dynamic_attr(tmp_path: Path) -> None:
     funcs = extract_functions(p, module="m")
     resolved = resolve_calls(funcs, fn_index={f.id: f for f in funcs}, imports_by_module={"m": {}})
     assert resolved.edges == []
-    assert any(u.reason == "dynamic-attr" for u in resolved.unresolved)
+    assert resolved.unresolved == []
 
 
 def test_resolves_self_method_inside_class(tmp_path: Path) -> None:
@@ -131,7 +133,8 @@ def test_resolves_self_method_inside_class(tmp_path: Path) -> None:
     assert edges and edges[0].dst == "m:C.helper"
 
 
-def test_super_method_call_is_unresolved_inside_class(tmp_path: Path) -> None:
+def test_super_method_call_is_silently_skipped(tmp_path: Path) -> None:
+    # super().method() resolves as dynamic-attr and is silently skipped.
     p = write_py(tmp_path / "m.py", '''
         class C:
             def main(self):
@@ -140,7 +143,7 @@ def test_super_method_call_is_unresolved_inside_class(tmp_path: Path) -> None:
     funcs = extract_functions(p, module="m")
     resolved = resolve_calls(funcs, fn_index={f.id: f for f in funcs}, imports_by_module={"m": {}})
     assert resolved.edges == []
-    assert any(u.src == "m:C.main" and u.name == "super().method" for u in resolved.unresolved)
+    assert resolved.unresolved == []
 
 
 def test_nested_class_method_resolution_does_not_crash(tmp_path: Path) -> None:

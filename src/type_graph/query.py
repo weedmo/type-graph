@@ -50,7 +50,7 @@ def query(question: str, *, graph_path: Path, client) -> int:
         return 3
     payload = _load(graph_path)
     cluster_lines = [f"- {c['id']}: {c.get('summary','')}" for c in payload["clusters"]]
-    function_names = [f["id"].replace(":", ".") for f in payload["functions"][:200]]
+    function_names = [f["qualname"] for f in payload["functions"][:200]]
     context_str = (
         "Clusters:\n" + "\n".join(cluster_lines)
         + "\n\nA few function names:\n" + ", ".join(function_names)

@@ -2,10 +2,15 @@
 from __future__ import annotations
 
 import ast
+import builtins
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from type_graph.extract import ExtractedFunction
+
+# Names that are always builtins and never user-defined functions in the project graph.
+# Calls to these names are silently skipped rather than counted as unresolved.
+_BUILTIN_NAMES: frozenset[str] = frozenset(dir(builtins))
 
 
 @dataclass(frozen=True)
@@ -89,6 +94,8 @@ def _resolve_one(
             if mod:
                 return f"{mod}:{attr}", ""
             return f"{target}:__call__", ""
+        if head in _BUILTIN_NAMES:
+            return None, "builtin"
         return None, "unknown-name"
 
     if head in module_imports:
@@ -119,6 +126,13 @@ def resolve_calls(
         for cs in fn.call_sites:
             dst, reason = _resolve_one(fn, cs.name, fn_index, imports)
             if dst is None:
+                if reason in ("builtin", "dynamic-attr"):
+                    # Silently skip:
+                    #   builtin   — int, len, str, … are never user-defined project functions.
+                    #   dynamic-attr — method calls on opaque/untyped objects (obj.method())
+                    #                 are inherently unresolvable without type inference; recording
+                    #                 them inflates the unresolved-call ratio misleadingly.
+                    continue
                 result.unresolved.append(
                     UnresolvedCall(src=fn.id, name=cs.name, lineno=cs.lineno, reason=reason)
                 )

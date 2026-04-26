@@ -74,7 +74,7 @@ def test_query_asks_llm_question_with_graph_context(tmp_path: Path, capsys) -> N
     assert client.context is not None
     assert "Clusters:" in client.context
     assert "A few function names:" in client.context
-    assert "sample_repo.api.make_user" in client.context
+    assert "make_user" in client.context
     assert "Question:" not in client.context
 
 
